@@ -1,0 +1,47 @@
+name: Deploy HTML App to AWS EKS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: 1. Checkout code
+        uses: actions/checkout@v3
+
+      - name: 2. Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: 3. Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: 4. Build Docker image
+        run: |
+          docker build -t html-demo .
+
+      - name: 5. Tag Docker image
+        run: |
+          docker tag html-demo:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/html-demo:latest
+
+      - name: 6. Push Docker image to ECR
+        run: |
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/html-demo:latest
+
+      - name: 7. Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name html-cluster --region ap-south-1
+
+      - name: 8. Deploy to Kubernetes
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
